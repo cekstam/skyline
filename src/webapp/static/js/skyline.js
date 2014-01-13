@@ -3,11 +3,13 @@ var GRAPHITE_HOST,
     FULL_NAMESPACE,
     mini_graph,
     big_graph,
+    week_graph,
     selected,
     anomalous_datapoint;
 
 var mini_data = [];
 var big_data = [];
+var week_data = [];
 var initial = true;
 
 // This function call is hardcoded as JSONP in the anomalies.json file
@@ -50,7 +52,13 @@ var handle_interaction = function() {
     anomalous_datapoint = parseInt($($('.selected').children('.count')).text())
  
     $.get("/api?metric=" + FULL_NAMESPACE + "" + selected, function(d){
-        big_data = JSON.parse(d)['results'];
+        week_data = JSON.parse(d)['results'];
+	week_graph.updateOptions( { 'file': week_data } );
+        //big_data = JSON.parse(d)['results'];
+	big_offset = (new Date().getTime() / 1000) - 86400;
+        big_data = week_data.filter(function (value) {
+          return value[0] > big_offset;
+        });
         big_graph.updateOptions( { 'file': big_data } );
         offset = (new Date().getTime() / 1000) - 3600;
         mini_data = big_data.filter(function (value) {
@@ -146,6 +154,45 @@ $(function(){
         }
     });
 
+    week_graph = new Dygraph(document.getElementById("biggraph"), week_data, {
+        labels: [ 'Date', '' ],
+        labelsDiv: document.getElementById('week_label'),
+        xAxisLabelWidth: 60,
+        yAxisLabelWidth: 35,
+        axisLabelFontSize: 9,
+        rollPeriod: 2,
+        drawXGrid: false,
+        drawYGrid: false,
+        interactionModel: {},
+        pixelsPerLabel: 14,
+        drawXAxis: false,
+        underlayCallback: function(canvas, area, g) {
+            line = g.toDomYCoord(anomalous_datapoint);
+            canvas.beginPath();
+            canvas.moveTo(0, line);
+            canvas.lineTo(canvas.canvas.width, line);
+            canvas.lineWidth = 1;
+            canvas.strokeStyle = '#ff0000';
+            canvas.stroke();
+        },
+        axes : {
+            x: {
+                valueFormatter: function(ms) {
+                return new Date(ms * 1000).strftime('%m/%d %H:%M') + ' ';
+                },
+            },
+            y : {
+                axisLineColor: 'white'
+            },
+            '' : {
+                axisLineColor: 'white',
+                axisLabelFormatter: function(x) {
+                    return Math.round(x);
+                }
+            }
+        }
+    });
+
     $.get('/app_settings', function(data){
         // Get the variables from settings.py
         data = JSON.parse(data);
@@ -179,8 +226,9 @@ $(function(){
 
 // I deeply apologize for this abomination
 var resize_window = function() {
-    mini_graph.resize($('#graph_container').width() - 7, ($('#graph_container').height() * (2/3)));
-    big_graph.resize($('#graph_container').width() - 7, ($('#graph_container').height() * (1/3) - 5));
+    mini_graph.resize($('#graph_container').width() - 7, ($('#graph_container').height() * (1/4)));
+    big_graph.resize($('#graph_container').width() - 7, ($('#graph_container').height() * (1/4) - 5));
+    week_graph.resize($('#graph_container').width() - 7, ($('#graph_container').height() * (1/4) - 5));
 }
 
 // Handle keyboard navigation
